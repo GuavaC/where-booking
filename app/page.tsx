@@ -115,7 +115,7 @@ export default function BookingPage() {
   }
 
   return (
-    <main className="mx-auto max-w-md min-h-screen bg-gray-50 pb-12">
+	<main className="mx-auto w-full max-w-md min-h-screen bg-gray-50 pb-12">
       {/* 頂部店家標題 */}
       <header className="bg-white p-6 shadow-sm border-b border-gray-100">
         <h1 className="text-xl font-bold text-gray-800">{store?.store_name || '載入中...'}</h1>
