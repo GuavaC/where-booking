@@ -163,7 +163,7 @@ export default function BookingPage() {
                 required
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-full p-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:border-black"
+                className="w-full min-w-0 max-w-full block appearance-none p-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:border-black bg-white"
               />
             </div>
             <div>
@@ -187,10 +187,10 @@ export default function BookingPage() {
           <section className="bg-amber-50/60 p-4 rounded-2xl border border-amber-200 space-y-3">
             <h2 className="text-sm font-semibold text-amber-900">3. 定金匯款與後五碼回報</h2>
             <div className="text-xs text-amber-800 space-y-1 bg-white/80 p-3 rounded-xl border border-amber-100">
-              <p>💳 **轉帳資訊**：{store?.bank_info}</p>
-              <p>💰 **應付定金**：<span className="font-bold text-rose-600">NT$ {selectedService.deposit}</span></p>
-              <p className="text-gray-500 text-[11px] mt-1">⚠️ 請於 15 分鐘內完成轉帳並填寫帳號後五碼，否則系統將自動釋出時段。</p>
-            </div>
+			  <p>💳 <strong className="font-semibold">轉帳資訊</strong>：{store?.bank_info}</p>
+			  <p>💰 <strong className="font-semibold">應付定金</strong>：<span className="font-bold text-rose-600">NT$ {selectedService.deposit}</span></p>
+			  <p className="text-gray-500 text-[11px] mt-1">⚠️ 請於 15 分鐘內完成轉帳並填寫帳號後五碼，否則系統將自動釋出時段。</p>
+			</div>
             <div>
               <label className="block text-xs text-gray-600 mb-1">請輸入您的轉帳帳號「後五碼」</label>
               <input
