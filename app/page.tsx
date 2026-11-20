@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { initLiff, LiffUser } from '@/lib/liff';
 import { supabase } from '@/lib/supabase';
 import { Store, Service } from '@/types/database';
+import BookingCalendarPicker from '@/components/BookingCalendarPicker';
 
 export default function BookingPage() {
   const [liffUser, setLiffUser] = useState<LiffUser | null>(null);
@@ -14,7 +15,8 @@ export default function BookingPage() {
   // 表單填寫狀態
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>('');
-  const [selectedTime, setSelectedTime] = useState<string>('14:00');
+  const [selectedTime, setSelectedTime] = useState<string>('');
+  const [selectedStartIso, setSelectedStartIso] = useState<string>('');
   const [bankLastFive, setBankLastFive] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState(false);
@@ -42,7 +44,10 @@ export default function BookingPage() {
 
       console.log('抓到的服務清單:', serviceData, '錯誤:', error);
 
-      if (serviceData) setServices(serviceData);
+      if (serviceData && serviceData.length > 0) {
+        setServices(serviceData);
+        setSelectedService(serviceData[0]);
+      }
       setLoading(false);
     }
     init();
@@ -51,8 +56,15 @@ export default function BookingPage() {
   // 2. 提交預約申請
   const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedService || !selectedDate || !bankLastFive || !liffUser || !store) {
-      alert('請完整填寫預約資訊與轉帳後五碼！');
+    if (
+      !selectedService ||
+      !selectedDate ||
+      !selectedTime ||
+      !bankLastFive ||
+      !liffUser ||
+      !store
+    ) {
+      alert('請完整填寫服務項目、日期時段與轉帳後五碼！');
       return;
     }
 
@@ -63,7 +75,9 @@ export default function BookingPage() {
 
     setSubmitting(true);
 
-    const startTime = new Date(`${selectedDate}T${selectedTime}:00`);
+    const startTime = selectedStartIso
+      ? new Date(selectedStartIso)
+      : new Date(`${selectedDate}T${selectedTime}:00`);
     const endTime = new Date(startTime.getTime() + selectedService.duration_minutes * 60000);
 
     const { error } = await supabase.from('appointments').insert({
@@ -89,15 +103,15 @@ export default function BookingPage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-50 text-gray-500">
+      <main className="mx-auto w-full max-w-md flex h-screen items-center justify-center bg-gray-50 text-gray-500">
         載入預約系統中...
-      </div>
+      </main>
     );
   }
 
   if (successMsg) {
     return (
-      <main className="mx-auto max-w-md min-h-screen bg-white p-6 flex flex-col justify-center items-center text-center">
+      <main className="mx-auto w-full max-w-md min-h-screen bg-white p-6 flex flex-col justify-center items-center text-center">
         <div className="text-5xl mb-4">🎉</div>
         <h1 className="text-2xl font-bold text-gray-800 mb-2">預約申請已送出！</h1>
         <p className="text-gray-600 mb-6 text-sm">
@@ -115,7 +129,7 @@ export default function BookingPage() {
   }
 
   return (
-	<main className="mx-auto w-full max-w-md min-h-screen bg-gray-50 pb-12">
+    <main className="mx-auto w-full max-w-md min-h-screen bg-gray-50 pb-12">
       {/* 頂部店家標題 */}
       <header className="bg-white p-6 shadow-sm border-b border-gray-100">
         <h1 className="text-xl font-bold text-gray-800">{store?.store_name || '載入中...'}</h1>
@@ -132,7 +146,11 @@ export default function BookingPage() {
             {services.map((s) => (
               <div
                 key={s.id}
-                onClick={() => setSelectedService(s)}
+                onClick={() => {
+                  setSelectedService(s);
+                  setSelectedTime('');
+                  setSelectedStartIso('');
+                }}
                 className={`p-3 rounded-xl border cursor-pointer transition-all ${
                   selectedService?.id === s.id
                     ? 'border-black bg-black/5 font-medium'
@@ -152,34 +170,22 @@ export default function BookingPage() {
           </div>
         </section>
 
-        {/* 步驟二：選擇日期與時段 */}
-        <section className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+        {/* 步驟二：互動式月曆與時段選擇 */}
+        <section className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <h2 className="text-sm font-semibold text-gray-700 mb-3">2. 選擇預約日期與時段</h2>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">選擇日期</label>
-              <input
-                type="date"
-                required
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-full min-w-0 max-w-full block appearance-none p-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:border-black bg-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">選擇時段</label>
-              <select
-                value={selectedTime}
-                onChange={(e) => setSelectedTime(e.target.value)}
-                className="w-full p-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:border-black bg-white"
-              >
-                <option value="10:00">10:00 AM</option>
-                <option value="13:00">01:00 PM</option>
-                <option value="15:30">03:30 PM</option>
-                <option value="18:00">06:00 PM</option>
-              </select>
-            </div>
-          </div>
+          {store?.id && (
+            <BookingCalendarPicker
+              storeId={store.id}
+              durationMinutes={selectedService?.duration_minutes || 60}
+              selectedDate={selectedDate}
+              selectedTime={selectedTime}
+              onSelectDateTime={(dateStr, timeStr, isoStr) => {
+                setSelectedDate(dateStr);
+                setSelectedTime(timeStr);
+                setSelectedStartIso(isoStr);
+              }}
+            />
+          )}
         </section>
 
         {/* 步驟三：定金轉帳與後五碼回報 */}
@@ -187,10 +193,10 @@ export default function BookingPage() {
           <section className="bg-amber-50/60 p-4 rounded-2xl border border-amber-200 space-y-3">
             <h2 className="text-sm font-semibold text-amber-900">3. 定金匯款與後五碼回報</h2>
             <div className="text-xs text-amber-800 space-y-1 bg-white/80 p-3 rounded-xl border border-amber-100">
-			  <p>💳 <strong className="font-semibold">轉帳資訊</strong>：{store?.bank_info}</p>
-			  <p>💰 <strong className="font-semibold">應付定金</strong>：<span className="font-bold text-rose-600">NT$ {selectedService.deposit}</span></p>
-			  <p className="text-gray-500 text-[11px] mt-1">⚠️ 請於 15 分鐘內完成轉帳並填寫帳號後五碼，否則系統將自動釋出時段。</p>
-			</div>
+              <p>💳 <strong className="font-semibold">轉帳資訊</strong>：{store?.bank_info}</p>
+              <p>💰 <strong className="font-semibold">應付定金</strong>：<span className="font-bold text-rose-600">NT$ {selectedService.deposit}</span></p>
+              <p className="text-gray-500 text-[11px] mt-1">⚠️ 請於 15 分鐘內完成轉帳並填寫帳號後五碼，否則系統將自動釋出時段。</p>
+            </div>
             <div>
               <label className="block text-xs text-gray-600 mb-1">請輸入您的轉帳帳號「後五碼」</label>
               <input

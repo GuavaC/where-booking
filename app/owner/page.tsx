@@ -29,17 +29,31 @@ export default function OwnerDashboard() {
   }, []);
 
   // 2. 老闆點擊確認入帳
-  const handleConfirmPayment = async (id: string) => {
-    const { error } = await supabase
-      .from('appointments')
-      .update({ payment_status: 'confirmed' })
-      .eq('id', id);
+  const handleConfirmPayment = async (appointmentId: string) => {
+    try {
+      const res = await fetch('/api/appointments/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointmentId }),
+      });
 
-    if (error) {
-      alert('更新狀態失敗');
-    } else {
-      alert('已成功確認入帳！');
-      fetchAppointments();
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        alert(data.error || '確認入帳失敗');
+        return;
+      }
+
+      if (data.lineNotified) {
+        alert('已確認入帳，並已發送 LINE 預約成功通知給客人！');
+      } else {
+        alert(`已確認入帳（未發送 LINE 推播：${data.reason || '請檢查設定'}）`);
+      }
+
+      // 重新整理預約清單
+      await fetchAppointments();
+    } catch (err) {
+      console.error(err);
+      alert('操作失敗，請稍後再試');
     }
   };
 
