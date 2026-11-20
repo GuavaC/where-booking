@@ -1,9 +1,6 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
 import { initLiff, LiffUser } from '@/lib/liff';
 import { supabase } from '@/lib/supabase';
 import { Appointment, Store } from '@/types/database';
@@ -13,10 +10,7 @@ import StoreSettingsManager from '@/components/owner/StoreSettingsManager';
 
 type OwnerTab = 'appointments' | 'services' | 'schedule' | 'settings';
 
-export default function StoreOwnerDashboard() {
-  const params = useParams<{ storeId: string }>();
-  const storeId = params?.storeId || '';
-
+export default function StoreOwnerClient({ storeId }: { storeId: string }) {
   const [activeTab, setActiveTab] = useState<OwnerTab>('appointments');
   const [liffUser, setLiffUser] = useState<LiffUser | null>(null);
   const [store, setStore] = useState<Store | null>(null);
