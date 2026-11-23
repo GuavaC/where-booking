@@ -5,6 +5,7 @@ import { initLiff, LiffUser } from '@/lib/liff';
 import { supabase } from '@/lib/supabase';
 import { Store, Service } from '@/types/database';
 import BookingCalendarPicker from '@/components/BookingCalendarPicker';
+import MyAppointmentsList from '@/components/MyAppointmentsList';
 
 export default function StoreBookingClient({ storeId }: { storeId: string }) {
   const [liffUser, setLiffUser] = useState<LiffUser | null>(null);
@@ -20,6 +21,7 @@ export default function StoreBookingClient({ storeId }: { storeId: string }) {
   const [bankLastFive, setBankLastFive] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState(false);
+  const [appointmentsRefreshKey, setAppointmentsRefreshKey] = useState(0);
 
   useEffect(() => {
     if (!storeId) return;
@@ -103,6 +105,7 @@ export default function StoreBookingClient({ storeId }: { storeId: string }) {
       console.error(error);
       alert('預約送出失敗，請稍後再試');
     } else {
+      setAppointmentsRefreshKey((k) => k + 1);
       setSuccessMsg(true);
     }
   };
@@ -239,7 +242,8 @@ export default function StoreBookingClient({ storeId }: { storeId: string }) {
           {submitting ? '提交預約中...' : '確認送出預約申請'}
         </button>
       </form>
-	  {liffUser?.userId && store?.id && (
+
+      {liffUser?.userId && store?.id && (
         <div className="px-4 mt-2">
           <MyAppointmentsList
             storeId={store.id}
