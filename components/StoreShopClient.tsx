@@ -25,6 +25,20 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
 
+  const loadProducts = useCallback(async (sId: string) => {
+    const { data: prodData } = await supabase
+      .from('products')
+      .select('*')
+      .eq('store_id', sId)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true });
+
+    if (prodData) {
+      setProducts(prodData as Product[]);
+    }
+  }, []);
+
   const loadMyOrders = useCallback(async (sId: string, lineId: string) => {
     const { data } = await supabase
       .from('orders')
@@ -65,17 +79,7 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
 
       setStore(storeData as Store);
 
-      const { data: prodData } = await supabase
-        .from('products')
-        .select('*')
-        .eq('store_id', storeId)
-        .eq('is_active', true)
-        .order('sort_order', { ascending: true })
-        .order('created_at', { ascending: true });
-
-      if (prodData) {
-        setProducts(prodData as Product[]);
-      }
+      await loadProducts(storeId);
 
       if (user?.userId) {
         await loadMyOrders(storeId, user.userId);
@@ -85,7 +89,7 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
     }
 
     init();
-  }, [storeId, loadMyOrders]);
+  }, [storeId, loadProducts, loadMyOrders]);
 
   const updateQty = (product: Product, delta: number) => {
     setCart((prev) => {
@@ -163,7 +167,10 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
       setCart({});
       setBankLastFive('');
       setNote('');
-      await loadMyOrders(store.id, liffUser.userId);
+      await Promise.all([
+        loadProducts(store.id),
+        loadMyOrders(store.id, liffUser.userId),
+      ]);
       setOrderSuccess(true);
     } catch (err) {
       console.error(err);
