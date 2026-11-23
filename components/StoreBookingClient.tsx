@@ -239,6 +239,16 @@ export default function StoreBookingClient({ storeId }: { storeId: string }) {
           {submitting ? '提交預約中...' : '確認送出預約申請'}
         </button>
       </form>
+	  {liffUser?.userId && store?.id && (
+        <div className="px-4 mt-2">
+          <MyAppointmentsList
+            storeId={store.id}
+            customerLineId={liffUser.userId}
+            refreshKey={appointmentsRefreshKey}
+            onCancelled={() => setAppointmentsRefreshKey((k) => k + 1)}
+          />
+        </div>
+      )}
     </main>
   );
 }
