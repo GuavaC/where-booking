@@ -9,7 +9,11 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(req: NextRequest) {
   try {
-    const { orderId, customerLineId } = await req.json();
+    const body = await req.json();
+    const { orderId, customerLineId } = body as {
+      orderId?: string;
+      customerLineId?: string;
+    };
 
     if (!orderId || !customerLineId) {
       return NextResponse.json(
@@ -18,10 +22,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. 查詢訂單、明細與店家資訊
+    // 1. 查詢訂單主表
     const { data: order, error: orderErr } = await supabase
       .from('orders')
-      .select('*, stores(store_name, owner_line_id), order_items(*)')
+      .select('*')
       .eq('id', orderId)
       .single();
 
@@ -43,7 +47,7 @@ export async function POST(req: NextRequest) {
     // 3. 僅允許「待對帳」狀態由客人取消
     if (order.status !== 'pending_verify') {
       return NextResponse.json(
-        { success: false, error: '此訂單已確認收款或已出貨，無法直接線上取消，請聯繫店家' },
+        { success: false, error: '此訂單已確認收款或已出貨，無法直接線上取消' },
         { status: 400 }
       );
     }
@@ -58,14 +62,19 @@ export async function POST(req: NextRequest) {
     if (updateErr) {
       console.error('取消訂單失敗:', updateErr);
       return NextResponse.json(
-        { success: false, error: '取消訂單失敗，請稍後再試' },
+        { success: false, error: `更新訂單狀態失敗：${updateErr.message}` },
         { status: 500 }
       );
     }
 
-    // 5. 加回有設定庫存的商品數量
-    if (Array.isArray(order.order_items)) {
-      for (const item of order.order_items) {
+    // 5. 查詢訂單明細並回補有設定庫存的商品數量
+    const { data: orderItems } = await supabase
+      .from('order_items')
+      .select('product_id, quantity')
+      .eq('order_id', orderId);
+
+    if (Array.isArray(orderItems)) {
+      for (const item of orderItems) {
         if (item.product_id) {
           const { data: prod } = await supabase
             .from('products')
@@ -83,10 +92,16 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 6. 推播 LINE 取消通知給老闆
+    // 6. 查詢店家資訊並推播 LINE 取消通知給老闆
+    const { data: store } = await supabase
+      .from('stores')
+      .select('store_name, owner_line_id')
+      .eq('id', order.store_id)
+      .single();
+
     const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-    const ownerLineId = order.stores?.owner_line_id;
-    const storeName = order.stores?.store_name || '商店';
+    const ownerLineId = store?.owner_line_id;
+    const storeName = store?.store_name || '商店';
 
     if (
       channelAccessToken &&
@@ -114,8 +129,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('orders/cancel error:', err);
+    const message = err instanceof Error ? err.message : '伺服器發生錯誤';
     return NextResponse.json(
-      { success: false, error: '伺服器發生錯誤' },
+      { success: false, error: message },
       { status: 500 }
     );
   }

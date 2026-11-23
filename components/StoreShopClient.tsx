@@ -209,7 +209,8 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
       ]);
     } catch (err) {
       console.error(err);
-      alert('取消訂單時發生錯誤');
+      const msg = err instanceof Error ? err.message : '未知錯誤';
+      alert(`取消訂單時發生錯誤：${msg}`);
     } finally {
       setCancellingOrderId(null);
     }
