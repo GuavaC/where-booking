@@ -23,6 +23,7 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
   const [bankLastFive, setBankLastFive] = useState('');
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [orderSuccess, setOrderSuccess] = useState(false);
 
   const loadProducts = useCallback(async (sId: string) => {
@@ -177,6 +178,40 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
       alert('送出訂單時發生錯誤');
     } finally {
       setSubmitting(false);
+    }
+  };
+  
+  const handleCancelOrder = async (orderId: string) => {
+    if (!store || !liffUser?.userId || cancellingOrderId) return;
+    if (!confirm('確定要取消這筆訂單嗎？取消後商品庫存將會回補。')) return;
+
+    setCancellingOrderId(orderId);
+    try {
+      const res = await fetch('/api/orders/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          customerLineId: liffUser.userId,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        alert(data.error || '取消訂單失敗');
+        return;
+      }
+
+      alert('訂單已取消！');
+      await Promise.all([
+        loadProducts(store.id),
+        loadMyOrders(store.id, liffUser.userId),
+      ]);
+    } catch (err) {
+      console.error(err);
+      alert('取消訂單時發生錯誤');
+    } finally {
+      setCancellingOrderId(null);
     }
   };
 
@@ -519,6 +554,18 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
                     <p className="text-[11px] text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-200 font-medium">
                       🚚 物流單號：{order.tracking_number}
                     </p>
+                  )}
+				  {order.status === 'pending_verify' && (
+                    <div className="pt-1.5 flex justify-end">
+                      <button
+                        type="button"
+                        disabled={cancellingOrderId === order.id}
+                        onClick={() => handleCancelOrder(order.id)}
+                        className="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 disabled:opacity-50 font-medium transition-colors"
+                      >
+                        {cancellingOrderId === order.id ? '取消中...' : '取消訂單'}
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}
