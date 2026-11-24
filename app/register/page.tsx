@@ -11,6 +11,7 @@ interface CreatedStoreResult {
   store_name: string;
   store_type: string;
   owner_line_id: string;
+  expires_at?: string | null;
 }
 
 function RegisterFormContent() {
@@ -96,6 +97,10 @@ function RegisterFormContent() {
   if (createdStore) {
     const customerUrl = `${origin}/store/${createdStore.id}`;
     const ownerUrl = `${origin}/store/${createdStore.id}/owner`;
+    const lineOaUrl = process.env.NEXT_PUBLIC_LINE_OA_URL;
+    const formattedExpireDate = createdStore.expires_at
+      ? new Date(createdStore.expires_at).toLocaleDateString('zh-TW')
+      : null;
 
     return (
       <main className="mx-auto w-full max-w-md min-h-screen bg-gray-50 p-4 sm:p-6 flex items-center">
@@ -106,6 +111,35 @@ function RegisterFormContent() {
             <p className="text-xs text-gray-500">
               「{createdStore.store_name}」已綁定您的 LINE 帳號為老闆。
             </p>
+            {formattedExpireDate && (
+              <p className="text-[11px] font-medium text-emerald-700 pt-0.5">
+                服務有效期至：{formattedExpireDate}
+              </p>
+            )}
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-[#06C755]/10 border border-[#06C755]/30 space-y-2 text-xs">
+            <p className="font-bold text-gray-800 flex items-center gap-1.5">
+              <span>🔔</span>
+              <span>重要第一步：開啟 LINE 接單通知</span>
+            </p>
+            <p className="text-gray-600 leading-relaxed">
+              請務必先加入系統通知官方帳號為好友，客人下單或取消時您才會即時收到 LINE 提醒！
+            </p>
+            {lineOaUrl ? (
+              <a
+                href={lineOaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full text-center py-2.5 rounded-lg bg-[#06C755] text-white font-bold shadow-sm hover:opacity-90 transition-opacity"
+              >
+                ➕ 點此加入通知官方帳號
+              </a>
+            ) : (
+              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                提醒：請確認您已加入本系統的 LINE 通知官方帳號好友，以確保能正常接收訂單推播。
+              </p>
+            )}
           </div>
 
           <div className="space-y-3 text-xs">

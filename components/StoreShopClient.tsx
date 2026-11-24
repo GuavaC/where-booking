@@ -5,9 +5,14 @@ import { initLiff, LiffUser } from '@/lib/liff';
 import { supabase } from '@/lib/supabase';
 import { Store, Product, Order, DeliveryMethod } from '@/types/database';
 
+type StoreWithExpiry = Store & {
+  expires_at?: string | null;
+  subscription_status?: string | null;
+};
+
 export default function StoreShopClient({ storeId }: { storeId: string }) {
   const [liffUser, setLiffUser] = useState<LiffUser | null>(null);
-  const [store, setStore] = useState<Store | null>(null);
+  const [store, setStore] = useState<StoreWithExpiry | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [myOrders, setMyOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,7 +83,7 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
         return;
       }
 
-      setStore(storeData as Store);
+      setStore(storeData as StoreWithExpiry);
 
       await loadProducts(storeId);
 
@@ -180,7 +185,7 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
       setSubmitting(false);
     }
   };
-  
+
   const handleCancelOrder = async (orderId: string) => {
     if (!store || !liffUser?.userId || cancellingOrderId) return;
     if (!confirm('確定要取消這筆訂單嗎？取消後商品庫存將會回補。')) return;
@@ -228,6 +233,25 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
     return (
       <main className="mx-auto w-full max-w-md flex h-screen items-center justify-center bg-gray-50 p-6 text-center text-gray-600">
         找不到此店家，請確認連結是否正確。
+      </main>
+    );
+  }
+
+  const isExpired =
+    store?.subscription_status === 'expired' ||
+    store?.subscription_status === 'suspended' ||
+    (store?.expires_at ? new Date(store.expires_at).getTime() < Date.now() : false);
+
+  if (isExpired) {
+    return (
+      <main className="mx-auto w-full max-w-md flex h-screen items-center justify-center bg-gray-50 p-6 text-center">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-2">
+          <div className="text-3xl">⏸️</div>
+          <p className="text-base font-bold text-gray-800">{store?.store_name}</p>
+          <p className="text-xs text-gray-500 leading-relaxed">
+            此商店線上訂購服務目前暫停開放，請聯繫店家或管理員確認。
+          </p>
+        </div>
       </main>
     );
   }
@@ -556,7 +580,7 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
                       🚚 物流單號：{order.tracking_number}
                     </p>
                   )}
-				  {order.status === 'pending_verify' && (
+                  {order.status === 'pending_verify' && (
                     <div className="pt-1.5 flex justify-end">
                       <button
                         type="button"

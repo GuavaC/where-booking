@@ -8,12 +8,17 @@ import ServicesManager from '@/components/owner/ServicesManager';
 import ScheduleManager from '@/components/owner/ScheduleManager';
 import StoreSettingsManager from '@/components/owner/StoreSettingsManager';
 
+type StoreWithExpiry = Store & {
+  expires_at?: string | null;
+  subscription_status?: string | null;
+};
+
 type OwnerTab = 'appointments' | 'services' | 'schedule' | 'settings';
 
 export default function StoreOwnerClient({ storeId }: { storeId: string }) {
   const [activeTab, setActiveTab] = useState<OwnerTab>('appointments');
   const [liffUser, setLiffUser] = useState<LiffUser | null>(null);
-  const [store, setStore] = useState<Store | null>(null);
+  const [store, setStore] = useState<StoreWithExpiry | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -35,7 +40,7 @@ export default function StoreOwnerClient({ storeId }: { storeId: string }) {
     setLiffUser(user);
 
     if (!storeRes.error && storeRes.data) {
-      setStore(storeRes.data as Store);
+      setStore(storeRes.data as StoreWithExpiry);
     }
 
     if (!apptRes.error && apptRes.data) {
@@ -137,25 +142,69 @@ export default function StoreOwnerClient({ storeId }: { storeId: string }) {
     );
   }
 
+  const expireTime = store.expires_at ? new Date(store.expires_at).getTime() : null;
+  const isExpired =
+    store.subscription_status === 'expired' ||
+    store.subscription_status === 'suspended' ||
+    (expireTime !== null ? expireTime < Date.now() : false);
+
+  if (isExpired) {
+    return (
+      <main className="mx-auto w-full max-w-md min-h-screen bg-gray-50 p-6 flex items-center justify-center text-center">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-rose-200 space-y-3">
+          <div className="text-3xl">⏳</div>
+          <h1 className="text-base font-bold text-gray-800">商店服務方案已到期</h1>
+          <p className="text-xs text-gray-600 leading-relaxed">
+            「{store.store_name}」的方案
+            {expireTime !== null
+              ? `已於 ${new Date(expireTime).toLocaleDateString('zh-TW')} 到期`
+              : '目前已停用'}
+            。<br />
+            如需續約，請透過 LINE 官方帳號或露天賣場聯繫管理員開通。
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  const daysLeft =
+    expireTime !== null ? Math.ceil((expireTime - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+  const isExpiringSoon = daysLeft !== null && daysLeft <= 7;
+
   const pendingCount = appointments.filter((a) => a.payment_status === 'pending_verify').length;
 
   return (
     <main className="mx-auto w-full max-w-2xl min-h-screen bg-gray-50 p-4 sm:p-6 pb-16">
-      <header className="flex justify-between items-center mb-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-        <div>
-          <h1 className="text-lg font-bold text-gray-800">🛠️ 老闆端管理後台</h1>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {store.store_name} ・ {liffUser?.displayName} {liffUser?.isDemo && '(測試模式)'}
-          </p>
+      <header className="mb-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-2.5">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-lg font-bold text-gray-800">🛠️ 老闆端管理後台</h1>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {store.store_name} ・ {liffUser?.displayName} {liffUser?.isDemo && '(測試模式)'}
+            </p>
+          </div>
+          {activeTab === 'appointments' && (
+            <button
+              onClick={fetchDashboardData}
+              disabled={loading}
+              className="bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 text-xs px-3 py-2 rounded-xl transition-all"
+            >
+              🔄 重新整理
+            </button>
+          )}
         </div>
-        {activeTab === 'appointments' && (
-          <button
-            onClick={fetchDashboardData}
-            disabled={loading}
-            className="bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 text-xs px-3 py-2 rounded-xl transition-all"
+
+        {expireTime !== null && (
+          <div
+            className={`px-3 py-1.5 rounded-xl text-[11px] font-medium flex items-center justify-between ${
+              isExpiringSoon
+                ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                : 'bg-gray-100 text-gray-600'
+            }`}
           >
-            🔄 重新整理
-          </button>
+            <span>📅 服務到期日：{new Date(expireTime).toLocaleDateString('zh-TW')}</span>
+            <span>{daysLeft !== null ? `剩餘 ${daysLeft} 天` : ''}</span>
+          </div>
         )}
       </header>
 

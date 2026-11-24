@@ -5,11 +5,16 @@ import { initLiff, LiffUser } from '@/lib/liff';
 import { supabase } from '@/lib/supabase';
 import { Store, Product, Order } from '@/types/database';
 
+type StoreWithExpiry = Store & {
+  expires_at?: string | null;
+  subscription_status?: string | null;
+};
+
 type OwnerTab = 'orders' | 'products' | 'settings';
 
 export default function StoreShopOwnerClient({ storeId }: { storeId: string }) {
   const [liffUser, setLiffUser] = useState<LiffUser | null>(null);
-  const [store, setStore] = useState<Store | null>(null);
+  const [store, setStore] = useState<StoreWithExpiry | null>(null);
   const [loading, setLoading] = useState(true);
   const [unauthorized, setUnauthorized] = useState(false);
   const [activeTab, setActiveTab] = useState<OwnerTab>('orders');
@@ -86,7 +91,7 @@ export default function StoreShopOwnerClient({ storeId }: { storeId: string }) {
         return;
       }
 
-      const typedStore = storeData as Store;
+      const typedStore = storeData as StoreWithExpiry;
       setStore(typedStore);
       setBankInfo(typedStore.bank_info || '');
       setShippingFee(String(typedStore.shipping_fee ?? 0));
@@ -251,13 +256,57 @@ export default function StoreShopOwnerClient({ storeId }: { storeId: string }) {
     );
   }
 
+  const expireTime = store?.expires_at ? new Date(store.expires_at).getTime() : null;
+  const isExpired =
+    store?.subscription_status === 'expired' ||
+    store?.subscription_status === 'suspended' ||
+    (expireTime !== null ? expireTime < Date.now() : false);
+
+  if (isExpired) {
+    return (
+      <main className="mx-auto w-full max-w-md flex h-screen items-center justify-center bg-gray-50 p-6 text-center">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-rose-200 space-y-3">
+          <div className="text-3xl">⏳</div>
+          <h1 className="text-base font-bold text-gray-800">商店服務方案已到期</h1>
+          <p className="text-xs text-gray-600 leading-relaxed">
+            「{store?.store_name}」的方案
+            {expireTime !== null
+              ? `已於 ${new Date(expireTime).toLocaleDateString('zh-TW')} 到期`
+              : '目前已停用'}
+            。<br />
+            如需續約，請透過 LINE 官方帳號或露天賣場聯繫管理員開通。
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  const daysLeft =
+    expireTime !== null ? Math.ceil((expireTime - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+  const isExpiringSoon = daysLeft !== null && daysLeft <= 7;
+
   return (
     <main className="mx-auto w-full max-w-md min-h-screen bg-gray-50 pb-14">
-      <header className="bg-white p-5 shadow-sm border-b border-gray-100">
-        <h1 className="text-lg font-bold text-gray-800">🛠️ 老闆端管理後台</h1>
-        <p className="text-xs text-gray-500 mt-0.5">
-          {store?.store_name} · {liffUser?.displayName}
-        </p>
+      <header className="bg-white p-5 shadow-sm border-b border-gray-100 space-y-2">
+        <div>
+          <h1 className="text-lg font-bold text-gray-800">🛠️ 老闆端管理後台</h1>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {store?.store_name} · {liffUser?.displayName}
+          </p>
+        </div>
+
+        {expireTime !== null && (
+          <div
+            className={`px-3 py-1.5 rounded-xl text-[11px] font-medium flex items-center justify-between ${
+              isExpiringSoon
+                ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                : 'bg-gray-100 text-gray-600'
+            }`}
+          >
+            <span>📅 服務到期日：{new Date(expireTime).toLocaleDateString('zh-TW')}</span>
+            <span>{daysLeft !== null ? `剩餘 ${daysLeft} 天` : ''}</span>
+          </div>
+        )}
       </header>
 
       {/* 分頁切換 */}

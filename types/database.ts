@@ -9,6 +9,7 @@ export interface Store {
   shipping_fee?: number;
   free_shipping_threshold?: number | null;
   created_at?: string;
+  expires_at?: string | null;
 }
 
 export interface Service {
