@@ -204,22 +204,34 @@ export async function POST(req: NextRequest) {
         .join('\n');
       const methodText = deliveryMethod === 'pickup' ? '面交自取' : '冷凍宅配';
 
-      await fetch('https://api.line.me/v2/bot/message/push', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${channelAccessToken}`,
-        },
-        body: JSON.stringify({
-          to: ownerLineId,
-          messages: [
-            {
-              type: 'text',
-              text: `🥟 新訂單通知（${store.store_name}）\n訂購人：${customerName.trim()}（${customerPhone.trim()}）\n方式：${methodText}\n明細：\n${summaryLines}\n應付總額：NT$ ${totalAmount}（後五碼：${bankLastFive.trim()}）\n請至老闆後台確認對帳！`,
-            },
-          ],
-        }),
-      }).catch((err) => console.error('LINE 推播新訂單失敗:', err));
+      try {
+        const lineRes = await fetch('https://api.line.me/v2/bot/message/push', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${channelAccessToken}`,
+          },
+          body: JSON.stringify({
+            to: ownerLineId,
+            messages: [
+              {
+                type: 'text',
+                text: `🥟 新訂單通知（${store.store_name}）\n訂購人：${customerName.trim()}（${customerPhone.trim()}）\n方式：${methodText}\n明細：\n${summaryLines}\n應付總額：NT$ ${totalAmount}（後五碼：${bankLastFive.trim()}）\n請至老闆後台確認對帳！`,
+              },
+            ],
+          }),
+        });
+
+        const lineBody = await lineRes.text();
+        console.log('📨 LINE push status:', lineRes.status, 'ownerLineId:', ownerLineId, 'body:', lineBody);
+      } catch (err) {
+        console.error('LINE 推播新訂單失敗:', err);
+      }
+    } else {
+      console.warn('⚠️ 略過 LINE 推播，請檢查:', {
+        hasToken: Boolean(channelAccessToken),
+        ownerLineId,
+      });
     }
 
     return NextResponse.json({ success: true, order: createdOrder });
