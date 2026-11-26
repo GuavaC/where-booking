@@ -94,7 +94,9 @@ export async function POST(req: NextRequest) {
     const storeName = storeInfo?.store_name || '預約工作室';
     const serviceName = serviceInfo?.name || '預約服務';
     const startText = formatTaiwanDateTime(appt.start_time);
-	const customerUrl = `${req.nextUrl.origin}/store/${appt.store_id}`;
+	const liffBaseUrl =
+	  process.env.NEXT_PUBLIC_LIFF_URL || 'https://liff.line.me/2012698099-NqhRzmeW';
+	const customerUrl = `${liffBaseUrl}/store/${appt.store_id}`;
 
     const messageText = [
       `🎉【${storeName}】預約成功通知`,

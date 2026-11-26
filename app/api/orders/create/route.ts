@@ -198,7 +198,9 @@ export async function POST(req: NextRequest) {
     // 7. 推播 LINE 新訂單通知給老闆
     const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
     const ownerLineId = store.owner_line_id;
-	const ownerUrl = `${req.nextUrl.origin}/store/${store.id}/owner`;
+	const liffBaseUrl =
+	  process.env.NEXT_PUBLIC_LIFF_URL || 'https://liff.line.me/2012698099-NqhRzmeW';
+	const ownerUrl = `${liffBaseUrl}/store/${store.id}/owner`;
     if (channelAccessToken && ownerLineId && !String(ownerLineId).startsWith('demo')) {
       const summaryLines = orderItemsToInsert
         .map((i) => `・${i.product_name} x${i.quantity}`)
