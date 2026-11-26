@@ -34,15 +34,26 @@ export async function POST(req: NextRequest) {
     let nextTracking = order.tracking_number || '';
     let lineMessage = '';
     const storeName = order.stores?.store_name || '商店';
+    const liffBaseUrl =
+      process.env.NEXT_PUBLIC_LIFF_URL || 'https://liff.line.me/2012698099-NqhRzmeW';
+    const customerUrl = `${liffBaseUrl}/store/${order.store_id}`;
 
     if (action === 'confirm_payment') {
       nextStatus = 'confirmed';
-      lineMessage = `✅ 收款確認通知（${storeName}）\n您好 ${order.customer_name}，我們已收到您的匯款（NT$ ${order.total_amount}），目前正在為您安排備貨與製作！`;
+      lineMessage = [
+        `✅ 收款確認通知（${storeName}）`,
+        `您好 ${order.customer_name}，我們已收到您的匯款（NT$ ${order.total_amount}），目前正在為您安排備貨與製作！`,
+        `👉 查看訂單與店家資訊：${customerUrl}`,
+      ].join('\n');
     } else if (action === 'ship_order') {
       nextStatus = 'shipped';
       nextTracking = trackingNumber ? String(trackingNumber).trim() : '';
       const trackingText = nextTracking ? `\n🚚 物流單號：${nextTracking}` : '';
-      lineMessage = `🚚 訂單已出貨通知（${storeName}）\n您好 ${order.customer_name}，您的訂購商品已安排寄出／可取貨囉！${trackingText}`;
+      lineMessage = [
+        `🚚 訂單已出貨通知（${storeName}）`,
+        `您好 ${order.customer_name}，您的訂購商品已安排寄出／可取貨囉！${trackingText}`,
+        `👉 查看訂單與店家資訊：${customerUrl}`,
+      ].join('\n');
     } else if (action === 'cancel_order') {
       nextStatus = 'cancelled';
       // 若原本未取消，加回商品庫存
