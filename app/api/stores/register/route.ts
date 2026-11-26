@@ -112,6 +112,55 @@ export async function POST(req: NextRequest) {
         .eq('code', matchedDbInviteCode);
     }
 
+    // 5. 推播商店開通成功與連結通知給老闆
+    const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+    const targetOwnerId = String(ownerLineId).trim();
+
+    if (channelAccessToken && targetOwnerId && !targetOwnerId.startsWith('demo')) {
+      const liffBaseUrl =
+        process.env.NEXT_PUBLIC_LIFF_URL || 'https://liff.line.me/2012698099-NqhRzmeW';
+      const expireDateText = new Date(data.expires_at || expiresAt).toLocaleDateString('zh-TW', {
+        timeZone: 'Asia/Taipei',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+      });
+      const customerUrl = `${liffBaseUrl}/store/${data.id}`;
+      const ownerUrl = `${liffBaseUrl}/store/${data.id}/owner`;
+
+      const welcomeMessage = [
+        `商店開通成功！`,
+        `「${data.store_name}」已綁定您的 LINE 帳號為老闆。`,
+        ``,
+        `服務有效期至：${expireDateText}`,
+        ``,
+        `🔔`,
+        `重要第一步：開啟 LINE 接單通知`,
+        ``,
+        `請務必先加入系統通知官方帳號為好友，客人下單或取消時您才會即時收到 LINE 提醒！`,
+        ``,
+        `提醒：請確認您已加入本系統的 LINE 通知官方帳號好友，以確保能正常接收訂單推播。`,
+        ``,
+        `1. 給客人的專屬連結`,
+        `${customerUrl}`,
+        ``,
+        `2. 您的老闆管理後台連結`,
+        `${ownerUrl}`,
+      ].join('\n');
+
+      await fetch('https://api.line.me/v2/bot/message/push', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${channelAccessToken}`,
+        },
+        body: JSON.stringify({
+          to: targetOwnerId,
+          messages: [{ type: 'text', text: welcomeMessage }],
+        }),
+      }).catch((err) => console.error('LINE 推播開通通知失敗:', err));
+    }
+
     return NextResponse.json({
       success: true,
       store: data,

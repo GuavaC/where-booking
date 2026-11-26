@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { initLiff, LiffUser } from '@/lib/liff';
 import { supabase } from '@/lib/supabase';
 import { Store, Product, Order } from '@/types/database';
+import StoreShareCard from '@/components/owner/StoreShareCard';
 
 type StoreWithExpiry = Store & {
   expires_at?: string | null;
@@ -287,7 +288,7 @@ export default function StoreShopOwnerClient({ storeId }: { storeId: string }) {
 
   return (
     <main className="mx-auto w-full max-w-md min-h-screen bg-gray-50 pb-14">
-      <header className="bg-white p-5 shadow-sm border-b border-gray-100 space-y-2">
+      <header className="bg-white p-5 shadow-sm border-b border-gray-100 space-y-2.5">
         <div>
           <h1 className="text-lg font-bold text-gray-800">🛠️ 老闆端管理後台</h1>
           <p className="text-xs text-gray-500 mt-0.5">
@@ -307,6 +308,8 @@ export default function StoreShopOwnerClient({ storeId }: { storeId: string }) {
             <span>{daysLeft !== null ? `剩餘 ${daysLeft} 天` : ''}</span>
           </div>
         )}
+
+        {store && <StoreShareCard storeId={store.id} storeName={store.store_name} />}
       </header>
 
       {/* 分頁切換 */}

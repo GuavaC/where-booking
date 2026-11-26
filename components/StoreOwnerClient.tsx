@@ -7,6 +7,7 @@ import { Appointment, Store } from '@/types/database';
 import ServicesManager from '@/components/owner/ServicesManager';
 import ScheduleManager from '@/components/owner/ScheduleManager';
 import StoreSettingsManager from '@/components/owner/StoreSettingsManager';
+import StoreShareCard from '@/components/owner/StoreShareCard';
 
 type StoreWithExpiry = Store & {
   expires_at?: string | null;
@@ -224,6 +225,7 @@ export default function StoreOwnerClient({ storeId }: { storeId: string }) {
             <span>{daysLeft !== null ? `剩餘 ${daysLeft} 天` : ''}</span>
           </div>
         )}
+		<StoreShareCard storeId={store.id} storeName={store.store_name} />
       </header>
 
       <nav className="grid grid-cols-4 gap-1.5 bg-white p-1.5 rounded-2xl shadow-sm border border-gray-100 mb-6">
