@@ -76,37 +76,47 @@ export default function StoreBookingClient({ storeId }: { storeId: string }) {
       return;
     }
 
-    if (bankLastFive.length !== 5) {
+    if (bankLastFive.trim().length !== 5) {
       alert('請輸入正確的 5 碼銀行帳號後五碼');
       return;
     }
 
     setSubmitting(true);
 
-    const startTime = selectedStartIso
-      ? new Date(selectedStartIso)
-      : new Date(`${selectedDate}T${selectedTime}:00`);
-    const endTime = new Date(startTime.getTime() + selectedService.duration_minutes * 60000);
+    try {
+      const startTime = selectedStartIso
+        ? new Date(selectedStartIso)
+        : new Date(`${selectedDate}T${selectedTime}:00`);
+      const endTime = new Date(startTime.getTime() + selectedService.duration_minutes * 60000);
 
-    const { error } = await supabase.from('appointments').insert({
-      store_id: store.id,
-      customer_line_id: liffUser.userId,
-      customer_name: liffUser.displayName,
-      service_id: selectedService.id,
-      start_time: startTime.toISOString(),
-      end_time: endTime.toISOString(),
-      payment_status: 'pending_verify',
-      bank_last_five: bankLastFive,
-    });
+      const res = await fetch('/api/appointments/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storeId: store.id,
+          customerLineId: liffUser.userId,
+          customerName: liffUser.displayName,
+          serviceId: selectedService.id,
+          startTime: startTime.toISOString(),
+          endTime: endTime.toISOString(),
+          bankLastFive: bankLastFive.trim(),
+        }),
+      });
 
-    setSubmitting(false);
+      const data = await res.json();
 
-    if (error) {
-      console.error(error);
-      alert('預約送出失敗，請稍後再試');
-    } else {
+      if (!res.ok || !data.success) {
+        alert(data.error || '預約送出失敗，請稍後再試');
+        return;
+      }
+
       setAppointmentsRefreshKey((k) => k + 1);
       setSuccessMsg(true);
+    } catch (err) {
+      console.error(err);
+      alert('網路連線異常，請稍後再試');
+    } finally {
+      setSubmitting(false);
     }
   };
 
