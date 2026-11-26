@@ -31,6 +31,8 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [orderSuccess, setOrderSuccess] = useState(false);
 
+  const lineOaUrl = process.env.NEXT_PUBLIC_LINE_OA_URL;
+
   const loadProducts = useCallback(async (sId: string) => {
     const { data: prodData } = await supabase
       .from('products')
@@ -259,18 +261,46 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
   if (orderSuccess) {
     return (
       <main className="mx-auto w-full max-w-md min-h-screen bg-white p-6 flex flex-col justify-center items-center text-center">
-        <div className="text-5xl mb-4">🥟</div>
-        <h1 className="text-2xl font-bold text-gray-800 mb-2">訂單已成功送出！</h1>
-        <p className="text-gray-600 mb-6 text-sm leading-relaxed">
-          我們已收到您的訂購明細與匯款後五碼。<br />
-          店家確認入帳與出貨後，將透過 LINE 通知您！
-        </p>
-        <button
-          onClick={() => setOrderSuccess(false)}
-          className="w-full bg-black text-white py-3 rounded-xl font-medium shadow"
-        >
-          返回商店查看訂單
-        </button>
+        <div className="w-full space-y-4">
+          <div className="text-5xl">🥟</div>
+          <h1 className="text-2xl font-bold text-gray-800">訂單已成功送出！</h1>
+          <p className="text-gray-600 text-sm leading-relaxed">
+            我們已收到您的訂購明細與匯款後五碼。<br />
+            店家確認入帳與出貨後，將透過 LINE 通知您！
+          </p>
+
+          <div className="p-3.5 rounded-xl bg-[#06C755]/10 border border-[#06C755]/30 space-y-2 text-xs text-left">
+            <p className="font-bold text-gray-800 flex items-center gap-1.5">
+              <span>🔔</span>
+              <span>重要提醒：開啟 LINE 訂單通知</span>
+            </p>
+            <p className="text-gray-600 leading-relaxed">
+              請務必先加入系統通知官方帳號為好友，確認收款、出貨進度或取消通知時您才會即時收到 LINE 提醒！
+            </p>
+            {lineOaUrl ? (
+              <a
+                href={lineOaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full text-center py-2.5 rounded-lg bg-[#06C755] text-white font-bold shadow-sm hover:opacity-90 transition-opacity"
+              >
+                ➕ 點此加入通知官方帳號
+              </a>
+            ) : (
+              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                提醒：請確認您已加入本系統的 LINE 通知官方帳號好友，以確保能正常接收訂單推播。
+              </p>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setOrderSuccess(false)}
+            className="w-full bg-black text-white py-3 rounded-xl font-medium shadow hover:bg-gray-800 transition-all"
+          >
+            返回商店查看訂單
+          </button>
+        </div>
       </main>
     );
   }

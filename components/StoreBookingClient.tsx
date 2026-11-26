@@ -23,6 +23,8 @@ export default function StoreBookingClient({ storeId }: { storeId: string }) {
   const [successMsg, setSuccessMsg] = useState(false);
   const [appointmentsRefreshKey, setAppointmentsRefreshKey] = useState(0);
 
+  const lineOaUrl = process.env.NEXT_PUBLIC_LINE_OA_URL;
+
   useEffect(() => {
     if (!storeId) return;
 
@@ -139,18 +141,46 @@ export default function StoreBookingClient({ storeId }: { storeId: string }) {
   if (successMsg) {
     return (
       <main className="mx-auto w-full max-w-md min-h-screen bg-white p-6 flex flex-col justify-center items-center text-center">
-        <div className="text-5xl mb-4">🎉</div>
-        <h1 className="text-2xl font-bold text-gray-800 mb-2">預約申請已送出！</h1>
-        <p className="text-gray-600 mb-6 text-sm">
-          我們已收到您的定金轉帳後五碼。<br />
-          老闆確認入帳後，將透過 LINE 發送預約成功通知給您！
-        </p>
-        <button
-          onClick={() => window.location.reload()}
-          className="w-full bg-black text-white py-3 rounded-xl font-medium shadow"
-        >
-          返回首頁
-        </button>
+        <div className="w-full space-y-4">
+          <div className="text-5xl">🎉</div>
+          <h1 className="text-2xl font-bold text-gray-800">預約申請已送出！</h1>
+          <p className="text-gray-600 text-sm leading-relaxed">
+            我們已收到您的定金轉帳後五碼。<br />
+            老闆確認入帳後，將透過 LINE 發送預約成功通知給您！
+          </p>
+
+          <div className="p-3.5 rounded-xl bg-[#06C755]/10 border border-[#06C755]/30 space-y-2 text-xs text-left">
+            <p className="font-bold text-gray-800 flex items-center gap-1.5">
+              <span>🔔</span>
+              <span>重要提醒：開啟 LINE 預約通知</span>
+            </p>
+            <p className="text-gray-600 leading-relaxed">
+              請務必先加入系統通知官方帳號為好友，預約確認入帳、取消或異動時您才會即時收到 LINE 提醒！
+            </p>
+            {lineOaUrl ? (
+              <a
+                href={lineOaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full text-center py-2.5 rounded-lg bg-[#06C755] text-white font-bold shadow-sm hover:opacity-90 transition-opacity"
+              >
+                ➕ 點此加入通知官方帳號
+              </a>
+            ) : (
+              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                提醒：請確認您已加入本系統的 LINE 通知官方帳號好友，以確保能正常接收預約推播。
+              </p>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="w-full bg-black text-white py-3 rounded-xl font-medium shadow hover:bg-gray-800 transition-all"
+          >
+            返回首頁
+          </button>
+        </div>
       </main>
     );
   }

@@ -27,6 +27,8 @@ function RegisterFormContent() {
   const [createdStore, setCreatedStore] = useState<CreatedStoreResult | null>(null);
   const [origin, setOrigin] = useState('');
 
+  const lineOaUrl = process.env.NEXT_PUBLIC_LINE_OA_URL;
+
   useEffect(() => {
     setOrigin(window.location.origin);
     async function loadUser() {
@@ -97,7 +99,6 @@ function RegisterFormContent() {
   if (createdStore) {
     const customerUrl = `${origin}/store/${createdStore.id}`;
     const ownerUrl = `${origin}/store/${createdStore.id}/owner`;
-    const lineOaUrl = process.env.NEXT_PUBLIC_LINE_OA_URL;
     const formattedExpireDate = createdStore.expires_at
       ? new Date(createdStore.expires_at).toLocaleDateString('zh-TW')
       : null;
@@ -277,6 +278,30 @@ function RegisterFormContent() {
               className="w-full p-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black"
             />
           </div>
+        </section>
+
+        <section className="p-3.5 rounded-xl bg-[#06C755]/10 border border-[#06C755]/30 space-y-2 text-xs">
+          <p className="font-bold text-gray-800 flex items-center gap-1.5">
+            <span>🔔</span>
+            <span>開通前請先加入通知官方帳號</span>
+          </p>
+          <p className="text-gray-600 leading-relaxed">
+            請先加入系統通知官方帳號為好友，開通成功通知、專屬連結以及未來的客人下單／取消提醒才能正常送達！
+          </p>
+          {lineOaUrl ? (
+            <a
+              href={lineOaUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full text-center py-2.5 rounded-lg bg-[#06C755] text-white font-bold shadow-sm hover:opacity-90 transition-opacity"
+            >
+              ➕ 點此先加入通知官方帳號
+            </a>
+          ) : (
+            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+              提醒：請確認您已加入本系統的 LINE 通知官方帳號好友，以免漏收開通與接單通知。
+            </p>
+          )}
         </section>
 
         <button
