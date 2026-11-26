@@ -25,7 +25,11 @@ export async function initLiff(): Promise<LiffUser> {
 
     // 若在外部瀏覽器開啟且未登入，導向 LINE Login
     if (!liff.isLoggedIn()) {
-      liff.login();
+      // 原本可能長這樣：
+	  // liff.login();
+
+	  // 改成這樣（登入完成後自動跳回原本所在的頁面，例如 /register 或 /store/xxx）：
+	  liff.login({ redirectUri: window.location.href });
       return {
         userId: 'loading',
         displayName: '登入跳轉中...',
