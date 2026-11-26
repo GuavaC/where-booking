@@ -56,6 +56,13 @@ export async function POST(req: NextRequest) {
       ].join('\n');
     } else if (action === 'cancel_order') {
       nextStatus = 'cancelled';
+      lineMessage = [
+        `❌ 訂單已取消通知（${storeName}）`,
+        `您好 ${order.customer_name}，您的訂購單（總額 NT$ ${order.total_amount}）已取消。`,
+        `若您已完成匯款，請直接與店家聯繫辦理退款事宜。`,
+        `👉 查看店家資訊：${customerUrl}`,
+      ].join('\n');
+
       // 若原本未取消，加回商品庫存
       if (order.status !== 'cancelled' && Array.isArray(order.order_items)) {
         for (const item of order.order_items) {

@@ -33,7 +33,7 @@ export default function MyAppointmentsList({
       .eq('store_id', storeId)
       .eq('customer_line_id', customerLineId)
       .in('payment_status', ['pending_verify', 'confirmed'])
-      .order('start_time', { ascending: true });
+      .order('start_time', { ascending: false });
 
     if (!error && data) {
       setItems(data as Appointment[]);
