@@ -125,6 +125,7 @@ export async function POST(req: NextRequest) {
     // 5. 推播 LINE 新預約通知給老闆
     const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
     const ownerLineId = store.owner_line_id;
+	const ownerUrl = `${req.nextUrl.origin}/store/${store.id}/owner`;
 
     if (channelAccessToken && ownerLineId && !String(ownerLineId).startsWith('demo')) {
       const formattedTime = formatTaiwanDateTime(startTime);
@@ -141,7 +142,7 @@ export async function POST(req: NextRequest) {
             messages: [
               {
                 type: 'text',
-                text: `📅 新預約通知（${store.store_name}）\n預約人：${(customerName || 'LINE 顧客').trim()}\n服務項目：${service.name}\n預約時間：${formattedTime}\n定金金額：NT$ ${service.deposit}（後五碼：${bankLastFive.trim()}）\n請至老闆後台確認對帳！`,
+                text: `📅 新預約通知（${store.store_name}）\n預約人：${(customerName || 'LINE 顧客').trim()}\n服務項目：${service.name}\n預約時間：${formattedTime}\n定金金額：NT$ ${service.deposit}（後五碼：${bankLastFive.trim()}）\n👉 前往老闆後台對帳確認：${ownerUrl}`,
               },
             ],
           }),

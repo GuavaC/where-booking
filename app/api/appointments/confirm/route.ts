@@ -94,6 +94,7 @@ export async function POST(req: NextRequest) {
     const storeName = storeInfo?.store_name || '預約工作室';
     const serviceName = serviceInfo?.name || '預約服務';
     const startText = formatTaiwanDateTime(appt.start_time);
+	const customerUrl = `${req.nextUrl.origin}/store/${appt.store_id}`;
 
     const messageText = [
       `🎉【${storeName}】預約成功通知`,
@@ -104,6 +105,7 @@ export async function POST(req: NextRequest) {
       `🕒 預約時間：${startText}`,
       serviceInfo?.duration_minutes ? `⏱️ 預計耗時：${serviceInfo.duration_minutes} 分鐘` : '',
       ``,
+	  `👉 查看店家與預約資訊：${customerUrl}`,
       `如需更改或取消預約，請直接回覆此官方帳號與我們聯繫，期待為您服務！`,
     ]
       .filter(Boolean)

@@ -198,6 +198,7 @@ export async function POST(req: NextRequest) {
     // 7. 推播 LINE 新訂單通知給老闆
     const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
     const ownerLineId = store.owner_line_id;
+	const ownerUrl = `${req.nextUrl.origin}/store/${store.id}/owner`;
     if (channelAccessToken && ownerLineId && !String(ownerLineId).startsWith('demo')) {
       const summaryLines = orderItemsToInsert
         .map((i) => `・${i.product_name} x${i.quantity}`)
@@ -216,7 +217,7 @@ export async function POST(req: NextRequest) {
             messages: [
               {
                 type: 'text',
-                text: `🥟 新訂單通知（${store.store_name}）\n訂購人：${customerName.trim()}（${customerPhone.trim()}）\n方式：${methodText}\n明細：\n${summaryLines}\n應付總額：NT$ ${totalAmount}（後五碼：${bankLastFive.trim()}）\n請至老闆後台確認對帳！`,
+                text: `🥟 新訂單通知（${store.store_name}）\n訂購人：${customerName.trim()}（${customerPhone.trim()}）\n方式：${methodText}\n明細：\n${summaryLines}\n應付總額：NT$ ${totalAmount}（後五碼：${bankLastFive.trim()}）\n👉 前往老闆後台對帳確認：${ownerUrl}`,
               },
             ],
           }),
