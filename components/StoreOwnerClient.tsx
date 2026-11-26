@@ -91,18 +91,36 @@ export default function StoreOwnerClient({ storeId }: { storeId: string }) {
     if (processingId) return;
     if (!confirm('確定要取消此筆預約嗎？')) return;
 
+    const effectiveOwnerId = liffUser?.userId || store?.owner_line_id;
+    if (!effectiveOwnerId) {
+      alert('無法驗證老闆身分，請重新整理頁面後再試');
+      return;
+    }
+
     setProcessingId(id);
-    const { error } = await supabase
-      .from('appointments')
-      .update({ payment_status: 'cancelled' })
-      .eq('id', id);
+    try {
+      const res = await fetch('/api/appointments/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appointmentId: id,
+          ownerLineId: effectiveOwnerId,
+        }),
+      });
 
-    setProcessingId(null);
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        alert(data.error || '取消預約失敗');
+        return;
+      }
 
-    if (error) {
-      alert('取消失敗');
-    } else {
-      fetchDashboardData();
+      alert('已取消此筆預約，並已通知客人！');
+      await fetchDashboardData();
+    } catch (err) {
+      console.error(err);
+      alert('網路連線異常，請稍後再試');
+    } finally {
+      setProcessingId(null);
     }
   };
 
