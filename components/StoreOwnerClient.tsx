@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { initLiff, LiffUser } from '@/lib/liff';
 import { supabase } from '@/lib/supabase';
 import { Appointment, Store } from '@/types/database';
+import type { MonthlyQuotaInfo } from '@/lib/monthlyQuota';
 import ServicesManager from '@/components/owner/ServicesManager';
 import ScheduleManager from '@/components/owner/ScheduleManager';
 import StoreSettingsManager from '@/components/owner/StoreSettingsManager';
@@ -21,10 +22,30 @@ export default function StoreOwnerClient({ storeId }: { storeId: string }) {
   const [liffUser, setLiffUser] = useState<LiffUser | null>(null);
   const [store, setStore] = useState<StoreWithExpiry | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [quota, setQuota] = useState<MonthlyQuotaInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  const fetchDashboardData = async () => {
+  const loadQuota = useCallback(async (sId: string) => {
+    try {
+      const res = await fetch(`/api/stores/${encodeURIComponent(sId)}/quota?type=booking`, {
+        cache: 'no-store',
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setQuota({
+          limit: data.limit,
+          used: data.used,
+          remaining: data.remaining,
+          isReached: data.isReached,
+        });
+      }
+    } catch (err) {
+      console.error('載入本月預約額度失敗:', err);
+    }
+  }, []);
+
+  const fetchDashboardData = useCallback(async () => {
     if (!storeId) return;
     setLoading(true);
 
@@ -36,6 +57,7 @@ export default function StoreOwnerClient({ storeId }: { storeId: string }) {
         .select('*, services(name, price, deposit)')
         .eq('store_id', storeId)
         .order('start_time', { ascending: false }),
+      loadQuota(storeId),
     ]);
 
     setLiffUser(user);
@@ -49,12 +71,11 @@ export default function StoreOwnerClient({ storeId }: { storeId: string }) {
     }
 
     setLoading(false);
-  };
+  }, [storeId, loadQuota]);
 
   useEffect(() => {
     fetchDashboardData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId]);
+  }, [fetchDashboardData]);
 
   const handleConfirmPayment = async (appointmentId: string) => {
     if (processingId) return;
@@ -225,7 +246,23 @@ export default function StoreOwnerClient({ storeId }: { storeId: string }) {
             <span>{daysLeft !== null ? `剩餘 ${daysLeft} 天` : ''}</span>
           </div>
         )}
-		<StoreShareCard storeId={store.id} storeName={store.store_name} />
+
+        {quota && (
+          <div
+            className={`px-3 py-1.5 rounded-xl text-[11px] font-medium flex items-center justify-between ${
+              quota.isReached
+                ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+            }`}
+          >
+            <span>
+              📊 本月預約額度：已用 {quota.used} / {quota.limit} 筆
+            </span>
+            <span>剩餘 {quota.remaining} 筆</span>
+          </div>
+        )}
+
+        <StoreShareCard storeId={store.id} storeName={store.store_name} />
       </header>
 
       <nav className="grid grid-cols-4 gap-1.5 bg-white p-1.5 rounded-2xl shadow-sm border border-gray-100 mb-6">

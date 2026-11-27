@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { initLiff, LiffUser } from '@/lib/liff';
 import { supabase } from '@/lib/supabase';
 import { Store, Product, Order, DeliveryMethod } from '@/types/database';
-import type { MonthlyQuotaInfo } from '@/lib/monthlyQuota';
 
 type StoreWithExpiry = Store & {
   expires_at?: string | null;
@@ -16,7 +15,6 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
   const [store, setStore] = useState<StoreWithExpiry | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [myOrders, setMyOrders] = useState<Order[]>([]);
-  const [quota, setQuota] = useState<MonthlyQuotaInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFoundStore, setNotFoundStore] = useState(false);
 
@@ -34,25 +32,6 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
   const [orderSuccess, setOrderSuccess] = useState(false);
 
   const lineOaUrl = process.env.NEXT_PUBLIC_LINE_OA_URL;
-
-  const loadQuota = useCallback(async (sId: string) => {
-    try {
-      const res = await fetch(`/api/stores/${encodeURIComponent(sId)}/quota?type=order`, {
-        cache: 'no-store',
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setQuota({
-          limit: data.limit,
-          used: data.used,
-          remaining: data.remaining,
-          isReached: data.isReached,
-        });
-      }
-    } catch (err) {
-      console.error('載入當月訂單額度失敗:', err);
-    }
-  }, []);
 
   const loadProducts = useCallback(async (sId: string) => {
     const { data: prodData } = await supabase
@@ -110,7 +89,6 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
 
       await Promise.all([
         loadProducts(storeId),
-        loadQuota(storeId),
         user?.userId ? loadMyOrders(storeId, user.userId) : Promise.resolve(),
       ]);
 
@@ -118,7 +96,7 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
     }
 
     init();
-  }, [storeId, loadProducts, loadQuota, loadMyOrders]);
+  }, [storeId, loadProducts, loadMyOrders]);
 
   const updateQty = (product: Product, delta: number) => {
     setCart((prev) => {
@@ -158,11 +136,6 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
     e.preventDefault();
     if (!store || !liffUser?.userId) return;
 
-    if (quota?.isReached) {
-      alert(`本商店本月線上訂單已達上限（${quota.limit} 筆），請直接聯繫店家訂購`);
-      return;
-    }
-
     if (totalCount === 0) {
       alert('請先選擇至少一項商品！');
       return;
@@ -195,7 +168,6 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
       const data = await res.json();
       if (!res.ok || !data.success) {
         alert(data.error || '訂單送出失敗');
-        await loadQuota(store.id);
         return;
       }
 
@@ -204,7 +176,6 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
       setNote('');
       await Promise.all([
         loadProducts(store.id),
-        loadQuota(store.id),
         loadMyOrders(store.id, liffUser.userId),
       ]);
       setOrderSuccess(true);
@@ -240,7 +211,6 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
       alert('訂單已取消！');
       await Promise.all([
         loadProducts(store.id),
-        loadQuota(store.id),
         loadMyOrders(store.id, liffUser.userId),
       ]);
     } catch (err) {
@@ -361,34 +331,14 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
 
   return (
     <main className="mx-auto w-full max-w-md min-h-screen bg-gray-50 pb-14">
-      <header className="bg-white p-6 shadow-sm border-b border-gray-100 space-y-2">
+      <header className="bg-white p-6 shadow-sm border-b border-gray-100">
         <h1 className="text-xl font-bold text-gray-800">{store?.store_name}</h1>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-gray-500 mt-1">
           登入身分：{liffUser?.displayName} {liffUser?.isDemo && '(測試模式)'}
         </p>
-        {quota && (
-          <div
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ${
-              quota.isReached
-                ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-            }`}
-          >
-            <span>{quota.isReached ? '⚠️' : '📦'}</span>
-            <span>
-              本月接單剩餘：{quota.remaining} / {quota.limit} 筆
-            </span>
-          </div>
-        )}
       </header>
 
       <form onSubmit={handleOrderSubmit} className="p-4 space-y-5">
-        {quota?.isReached && (
-          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium">
-            本商店本月線上接單名額已滿（{quota.limit} / {quota.limit} 筆），請直接聯繫店家訂購。
-          </div>
-        )}
-
         {/* 1. 商品選購 */}
         <section className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-3">
           <div className="flex items-center justify-between">
@@ -612,14 +562,10 @@ export default function StoreShopClient({ storeId }: { storeId: string }) {
 
         <button
           type="submit"
-          disabled={submitting || totalCount === 0 || Boolean(quota?.isReached)}
+          disabled={submitting || totalCount === 0}
           className="w-full bg-black text-white py-4 rounded-2xl font-medium shadow-lg hover:bg-gray-800 disabled:bg-gray-300 transition-all"
         >
-          {quota?.isReached
-            ? '本月接單已額滿'
-            : submitting
-              ? '送出訂單中...'
-              : `送出訂單（NT$ ${totalAmount}）`}
+          {submitting ? '送出訂單中...' : `送出訂單（NT$ ${totalAmount}）`}
         </button>
       </form>
 

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { initLiff, LiffUser } from '@/lib/liff';
 import { supabase } from '@/lib/supabase';
 import { Store, Product, Order } from '@/types/database';
+import type { MonthlyQuotaInfo } from '@/lib/monthlyQuota';
 import StoreShareCard from '@/components/owner/StoreShareCard';
 
 type StoreWithExpiry = Store & {
@@ -16,6 +17,7 @@ type OwnerTab = 'orders' | 'products' | 'settings';
 export default function StoreShopOwnerClient({ storeId }: { storeId: string }) {
   const [liffUser, setLiffUser] = useState<LiffUser | null>(null);
   const [store, setStore] = useState<StoreWithExpiry | null>(null);
+  const [quota, setQuota] = useState<MonthlyQuotaInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [unauthorized, setUnauthorized] = useState(false);
   const [activeTab, setActiveTab] = useState<OwnerTab>('orders');
@@ -40,6 +42,25 @@ export default function StoreShopOwnerClient({ storeId }: { storeId: string }) {
   const [shippingFee, setShippingFee] = useState('0');
   const [freeThreshold, setFreeThreshold] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
+
+  const loadQuota = useCallback(async (sId: string) => {
+    try {
+      const res = await fetch(`/api/stores/${encodeURIComponent(sId)}/quota?type=order`, {
+        cache: 'no-store',
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setQuota({
+          limit: data.limit,
+          used: data.used,
+          remaining: data.remaining,
+          isReached: data.isReached,
+        });
+      }
+    } catch (err) {
+      console.error('載入本月接單額度失敗:', err);
+    }
+  }, []);
 
   const loadOrders = useCallback(async (sId: string) => {
     const { data } = await supabase
@@ -100,12 +121,12 @@ export default function StoreShopOwnerClient({ storeId }: { storeId: string }) {
         typedStore.free_shipping_threshold ? String(typedStore.free_shipping_threshold) : ''
       );
 
-      await Promise.all([loadOrders(storeId), loadProducts(storeId)]);
+      await Promise.all([loadOrders(storeId), loadProducts(storeId), loadQuota(storeId)]);
       setLoading(false);
     }
 
     init();
-  }, [storeId, loadOrders, loadProducts]);
+  }, [storeId, loadOrders, loadProducts, loadQuota]);
 
   // 訂單操作（確認收款 / 確認出貨 / 取消）
   const handleOrderAction = async (
@@ -136,7 +157,7 @@ export default function StoreShopOwnerClient({ storeId }: { storeId: string }) {
         return;
       }
 
-      await Promise.all([loadOrders(storeId), loadProducts(storeId)]);
+      await Promise.all([loadOrders(storeId), loadProducts(storeId), loadQuota(storeId)]);
     } catch (err) {
       console.error(err);
       alert('執行訂單操作失敗');
@@ -306,6 +327,21 @@ export default function StoreShopOwnerClient({ storeId }: { storeId: string }) {
           >
             <span>📅 服務到期日：{new Date(expireTime).toLocaleDateString('zh-TW')}</span>
             <span>{daysLeft !== null ? `剩餘 ${daysLeft} 天` : ''}</span>
+          </div>
+        )}
+
+        {quota && (
+          <div
+            className={`px-3 py-1.5 rounded-xl text-[11px] font-medium flex items-center justify-between ${
+              quota.isReached
+                ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+            }`}
+          >
+            <span>
+              📊 本月接單額度：已用 {quota.used} / {quota.limit} 筆
+            </span>
+            <span>剩餘 {quota.remaining} 筆</span>
           </div>
         )}
 
@@ -530,26 +566,25 @@ export default function StoreShopOwnerClient({ storeId }: { storeId: string }) {
                 <label className="block text-xs text-gray-600 mb-1">單價 (NT$) *</label>
                 <input
                   type="number"
-                  required
                   min={0}
+                  required
                   value={prodPrice}
                   onChange={(e) => setProdPrice(e.target.value)}
                   className="w-full p-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black"
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-600 mb-1">單位 *</label>
+                <label className="block text-xs text-gray-600 mb-1">單位</label>
                 <input
                   type="text"
-                  required
-                  placeholder="包（30顆）"
+                  placeholder="包 / 盒"
                   value={prodUnit}
                   onChange={(e) => setProdUnit(e.target.value)}
                   className="w-full p-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black"
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-600 mb-1">庫存（空＝不限）</label>
+                <label className="block text-xs text-gray-600 mb-1">庫存（留空不限）</label>
                 <input
                   type="number"
                   min={0}
@@ -564,63 +599,57 @@ export default function StoreShopOwnerClient({ storeId }: { storeId: string }) {
             <button
               type="submit"
               disabled={savingProduct}
-              className="w-full bg-black text-white py-3 rounded-xl text-sm font-medium hover:bg-gray-800 disabled:bg-gray-300"
+              className="w-full bg-black text-white py-2.5 rounded-xl text-xs font-medium hover:bg-gray-800 disabled:opacity-50"
             >
-              {savingProduct
-                ? '儲存中...'
-                : editingProductId
-                ? '儲存商品變更'
-                : '新增商品'}
+              {savingProduct ? '儲存中...' : editingProductId ? '儲存修改' : '新增商品'}
             </button>
           </form>
 
-          {/* 商品列表 */}
           <div className="space-y-2.5">
-            <h3 className="text-xs font-semibold text-gray-600 px-1">
-              目前商品列表（共 {products.length} 項）
-            </h3>
             {products.map((p) => (
               <div
                 key={p.id}
-                className={`bg-white p-3.5 rounded-2xl border space-y-2 ${
-                  p.is_active ? 'border-gray-100' : 'border-gray-200 opacity-60'
-                }`}
+                className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-start justify-between gap-3 text-xs"
               >
-                <div className="flex justify-between items-start gap-2">
-                  <div>
-                    <p className="text-sm font-bold text-gray-800">
-                      {p.name}{' '}
-                      {!p.is_active && (
-                        <span className="text-[11px] text-gray-500 font-normal">（已下架）</span>
-                      )}
-                    </p>
-                    {p.description && <p className="text-xs text-gray-500 mt-0.5">{p.description}</p>}
-                    <p className="text-xs text-gray-700 mt-1">
-                      NT$ <strong>{p.price}</strong> / {p.unit} · 庫存：
-                      <strong>{p.stock === null ? '不限' : p.stock}</strong>
-                    </p>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-gray-800">{p.name}</span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                        p.is_active
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-gray-100 text-gray-500'
+                      }`}
+                    >
+                      {p.is_active ? '上架中' : '已下架'}
+                    </span>
                   </div>
+                  {p.description && <p className="text-gray-500">{p.description}</p>}
+                  <p className="text-gray-700 font-medium">
+                    NT$ {p.price} / {p.unit}
+                    {p.stock !== null ? ` · 庫存 ${p.stock}` : ' · 庫存不限'}
+                  </p>
                 </div>
 
-                <div className="flex gap-2 pt-1 text-xs">
+                <div className="flex flex-col gap-1.5 shrink-0">
                   <button
                     type="button"
                     onClick={() => startEditProduct(p)}
-                    className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+                    className="px-2.5 py-1 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
                   >
-                    編輯 / 改庫存
+                    編輯
                   </button>
                   <button
                     type="button"
                     onClick={() => handleToggleProductActive(p)}
-                    className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+                    className="px-2.5 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
                   >
-                    {p.is_active ? '下架' : '重新上架'}
+                    {p.is_active ? '下架' : '上架'}
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDeleteProduct(p)}
-                    className="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 ml-auto"
+                    className="px-2.5 py-1 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50"
                   >
                     刪除
                   </button>
@@ -633,41 +662,45 @@ export default function StoreShopOwnerClient({ storeId }: { storeId: string }) {
 
       {/* Tab 3: 運費與收款設定 */}
       {activeTab === 'settings' && (
-        <form onSubmit={handleSaveSettings} className="p-4 space-y-4">
-          <section className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-3">
-            <h2 className="text-sm font-bold text-gray-800">💳 收款與冷凍運費設定</h2>
+        <div className="p-4">
+          <form
+            onSubmit={handleSaveSettings}
+            className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-3 text-xs"
+          >
+            <h2 className="text-sm font-bold text-gray-800">💳 收款帳號與冷凍宅配運費</h2>
 
             <div>
-              <label className="block text-xs text-gray-600 mb-1">匯款銀行帳號資訊</label>
-              <input
-                type="text"
+              <label className="block text-gray-600 mb-1">匯款帳號資訊 *</label>
+              <textarea
+                rows={3}
+                required
+                placeholder="例如：中國信託 (822) 1234-5678-9012"
                 value={bankInfo}
                 onChange={(e) => setBankInfo(e.target.value)}
-                placeholder="例如：國泰世華 (013) 1234-5678-9012"
-                className="w-full p-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black"
+                className="w-full p-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-xs text-gray-600 mb-1">冷凍宅配運費 (NT$)</label>
+                <label className="block text-gray-600 mb-1">冷凍宅配運費 (NT$)</label>
                 <input
                   type="number"
                   min={0}
                   value={shippingFee}
                   onChange={(e) => setShippingFee(e.target.value)}
-                  className="w-full p-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black"
+                  className="w-full p-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black"
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-600 mb-1">滿額免運門檻（空＝不免運）</label>
+                <label className="block text-gray-600 mb-1">滿額免運門檻（留空無免運）</label>
                 <input
                   type="number"
                   min={0}
                   placeholder="例如：1500"
                   value={freeThreshold}
                   onChange={(e) => setFreeThreshold(e.target.value)}
-                  className="w-full p-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black"
+                  className="w-full p-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black"
                 />
               </div>
             </div>
@@ -675,12 +708,12 @@ export default function StoreShopOwnerClient({ storeId }: { storeId: string }) {
             <button
               type="submit"
               disabled={savingSettings}
-              className="w-full bg-black text-white py-3.5 rounded-xl text-sm font-medium hover:bg-gray-800 disabled:bg-gray-300"
+              className="w-full bg-black text-white py-2.5 rounded-xl font-medium hover:bg-gray-800 disabled:opacity-50"
             >
               {savingSettings ? '儲存中...' : '儲存設定'}
             </button>
-          </section>
-        </form>
+          </form>
+        </div>
       )}
     </main>
   );
