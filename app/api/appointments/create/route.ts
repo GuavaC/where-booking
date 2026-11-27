@@ -1,41 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getStoreMonthlyQuota } from '@/lib/monthlyQuota';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
-
-const DEFAULT_MONTHLY_LIMIT = 50;
-
-function getMonthlyLimit(): number {
-  const raw = Number(process.env.MONTHLY_BOOKING_LIMIT);
-  if (Number.isFinite(raw) && raw > 0) {
-    return Math.floor(raw);
-  }
-  return DEFAULT_MONTHLY_LIMIT;
-}
-
-function getTaiwanMonthRangeIso(now = new Date()): { startIso: string; endIso: string } {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Taipei',
-    year: 'numeric',
-    month: '2-digit',
-  }).formatToParts(now);
-
-  const year = Number(parts.find((p) => p.type === 'year')?.value);
-  const month = Number(parts.find((p) => p.type === 'month')?.value);
-
-  // 台灣為 UTC+8（無日光節約時間），月初 00:00:00+08:00 轉成 UTC ISO 字串
-  const startUtcMs = Date.UTC(year, month - 1, 1, -8, 0, 0, 0);
-  const nextMonthUtcMs = Date.UTC(year, month, 1, -8, 0, 0, 0);
-
-  return {
-    startIso: new Date(startUtcMs).toISOString(),
-    endIso: new Date(nextMonthUtcMs).toISOString(),
-  };
-}
 
 function formatTaiwanDateTime(isoString: string): string {
   try {
@@ -101,18 +72,10 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. 檢查該店家本月預約筆數是否已達上限（排除已取消）
-    const monthlyLimit = getMonthlyLimit();
-    const { startIso, endIso } = getTaiwanMonthRangeIso();
-
-    const { count: currentMonthCount, error: countErr } = await supabase
-      .from('appointments')
-      .select('id', { count: 'exact', head: true })
-      .eq('store_id', storeId)
-      .neq('payment_status', 'cancelled')
-      .gte('created_at', startIso)
-      .lt('created_at', endIso);
-
-    if (countErr) {
+    let quota;
+    try {
+      quota = await getStoreMonthlyQuota(supabase, storeId, 'booking');
+    } catch (countErr) {
       console.error('查詢本月預約筆數失敗:', countErr);
       return NextResponse.json(
         { success: false, error: '系統忙碌中，請稍後再試' },
@@ -120,11 +83,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if ((currentMonthCount ?? 0) >= monthlyLimit) {
+    if (quota.isReached) {
       return NextResponse.json(
         {
           success: false,
-          error: `本商店本月線上預約已達上限（${monthlyLimit} 筆），請直接聯繫店家預約`,
+          error: `本商店本月線上預約已達上限（${quota.limit} 筆），請直接聯繫店家預約`,
         },
         { status: 429 }
       );

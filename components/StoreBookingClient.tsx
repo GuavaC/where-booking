@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { initLiff, LiffUser } from '@/lib/liff';
 import { supabase } from '@/lib/supabase';
 import { Store, Service } from '@/types/database';
+import type { MonthlyQuotaInfo } from '@/lib/monthlyQuota';
 import BookingCalendarPicker from '@/components/BookingCalendarPicker';
 import MyAppointmentsList from '@/components/MyAppointmentsList';
 
@@ -11,6 +12,7 @@ export default function StoreBookingClient({ storeId }: { storeId: string }) {
   const [liffUser, setLiffUser] = useState<LiffUser | null>(null);
   const [store, setStore] = useState<Store | null>(null);
   const [services, setServices] = useState<Service[]>([]);
+  const [quota, setQuota] = useState<MonthlyQuotaInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFoundStore, setNotFoundStore] = useState(false);
 
@@ -24,6 +26,25 @@ export default function StoreBookingClient({ storeId }: { storeId: string }) {
   const [appointmentsRefreshKey, setAppointmentsRefreshKey] = useState(0);
 
   const lineOaUrl = process.env.NEXT_PUBLIC_LINE_OA_URL;
+
+  const loadQuota = useCallback(async (sId: string) => {
+    try {
+      const res = await fetch(`/api/stores/${encodeURIComponent(sId)}/quota?type=booking`, {
+        cache: 'no-store',
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setQuota({
+          limit: data.limit,
+          used: data.used,
+          remaining: data.remaining,
+          isReached: data.isReached,
+        });
+      }
+    } catch (err) {
+      console.error('載入當月預約額度失敗:', err);
+    }
+  }, []);
 
   useEffect(() => {
     if (!storeId) return;
@@ -47,11 +68,14 @@ export default function StoreBookingClient({ storeId }: { storeId: string }) {
 
       setStore(storeData as Store);
 
-      const { data: serviceData } = await supabase
-        .from('services')
-        .select('*')
-        .eq('store_id', storeId)
-        .order('created_at', { ascending: true });
+      const [{ data: serviceData }] = await Promise.all([
+        supabase
+          .from('services')
+          .select('*')
+          .eq('store_id', storeId)
+          .order('created_at', { ascending: true }),
+        loadQuota(storeId),
+      ]);
 
       if (serviceData && serviceData.length > 0) {
         setServices(serviceData as Service[]);
@@ -62,10 +86,14 @@ export default function StoreBookingClient({ storeId }: { storeId: string }) {
     }
 
     init();
-  }, [storeId]);
+  }, [storeId, loadQuota]);
 
   const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (quota?.isReached) {
+      alert(`本商店本月線上預約已達上限（${quota.limit} 筆），請直接聯繫店家預約`);
+      return;
+    }
     if (
       !selectedService ||
       !selectedDate ||
@@ -109,9 +137,11 @@ export default function StoreBookingClient({ storeId }: { storeId: string }) {
 
       if (!res.ok || !data.success) {
         alert(data.error || '預約送出失敗，請稍後再試');
+        await loadQuota(store.id);
         return;
       }
 
+      await loadQuota(store.id);
       setAppointmentsRefreshKey((k) => k + 1);
       setSuccessMsg(true);
     } catch (err) {
@@ -187,14 +217,34 @@ export default function StoreBookingClient({ storeId }: { storeId: string }) {
 
   return (
     <main className="mx-auto w-full max-w-md min-h-screen bg-gray-50 pb-12">
-      <header className="bg-white p-6 shadow-sm border-b border-gray-100">
+      <header className="bg-white p-6 shadow-sm border-b border-gray-100 space-y-2">
         <h1 className="text-xl font-bold text-gray-800">{store?.store_name || '載入中...'}</h1>
-        <p className="text-xs text-gray-500 mt-1">
+        <p className="text-xs text-gray-500">
           登入身分：{liffUser?.displayName} {liffUser?.isDemo && '(測試模式)'}
         </p>
+        {quota && (
+          <div
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ${
+              quota.isReached
+                ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+            }`}
+          >
+            <span>{quota.isReached ? '⚠️' : '📅'}</span>
+            <span>
+              本月預約剩餘：{quota.remaining} / {quota.limit} 筆
+            </span>
+          </div>
+        )}
       </header>
 
       <form onSubmit={handleBookingSubmit} className="p-4 space-y-6">
+        {quota?.isReached && (
+          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium">
+            本商店本月線上預約名額已滿（{quota.limit} / {quota.limit} 筆），請直接聯繫店家預約。
+          </div>
+        )}
+
         <section className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
           <h2 className="text-sm font-semibold text-gray-700 mb-3">1. 選擇預約服務項目</h2>
           <div className="space-y-2">
@@ -276,10 +326,14 @@ export default function StoreBookingClient({ storeId }: { storeId: string }) {
 
         <button
           type="submit"
-          disabled={submitting || !selectedService}
+          disabled={submitting || !selectedService || Boolean(quota?.isReached)}
           className="w-full bg-black text-white py-4 rounded-2xl font-medium shadow-lg hover:bg-gray-800 disabled:bg-gray-300 transition-all"
         >
-          {submitting ? '提交預約中...' : '確認送出預約申請'}
+          {quota?.isReached
+            ? '本月預約已額滿'
+            : submitting
+              ? '提交預約中...'
+              : '確認送出預約申請'}
         </button>
       </form>
 
@@ -289,7 +343,10 @@ export default function StoreBookingClient({ storeId }: { storeId: string }) {
             storeId={store.id}
             customerLineId={liffUser.userId}
             refreshKey={appointmentsRefreshKey}
-            onCancelled={() => setAppointmentsRefreshKey((k) => k + 1)}
+            onCancelled={() => {
+              setAppointmentsRefreshKey((k) => k + 1);
+              loadQuota(store.id);
+            }}
           />
         </div>
       )}
