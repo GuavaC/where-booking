@@ -7,6 +7,42 @@ const supabaseKey =
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const DEFAULT_MONTHLY_LIMIT = 50;
+
+function getMonthlyOrderLimit(): number {
+  const rawOrderLimit = Number(process.env.MONTHLY_ORDER_LIMIT);
+  if (Number.isFinite(rawOrderLimit) && rawOrderLimit > 0) {
+    return Math.floor(rawOrderLimit);
+  }
+
+  const rawBookingLimit = Number(process.env.MONTHLY_BOOKING_LIMIT);
+  if (Number.isFinite(rawBookingLimit) && rawBookingLimit > 0) {
+    return Math.floor(rawBookingLimit);
+  }
+
+  return DEFAULT_MONTHLY_LIMIT;
+}
+
+function getTaiwanMonthRangeIso(now = new Date()): { startIso: string; endIso: string } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(now);
+
+  const year = Number(parts.find((p) => p.type === 'year')?.value);
+  const month = Number(parts.find((p) => p.type === 'month')?.value);
+
+  // 台灣為 UTC+8（無日光節約時間），月初 00:00:00+08:00 轉成 UTC ISO 字串
+  const startUtcMs = Date.UTC(year, month - 1, 1, -8, 0, 0, 0);
+  const nextMonthUtcMs = Date.UTC(year, month, 1, -8, 0, 0, 0);
+
+  return {
+    startIso: new Date(startUtcMs).toISOString(),
+    endIso: new Date(nextMonthUtcMs).toISOString(),
+  };
+}
+
 interface CartItemInput {
   productId: string;
   quantity: number;
@@ -79,7 +115,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: '找不到此店家' }, { status: 404 });
     }
 
-    // 2. 取得資料庫最新商品單價與庫存
+    // 2. 檢查該店家本月訂單筆數是否已達上限（排除已取消）
+    const monthlyLimit = getMonthlyOrderLimit();
+    const { startIso, endIso } = getTaiwanMonthRangeIso();
+
+    const { count: currentMonthCount, error: countErr } = await supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('store_id', storeId)
+      .neq('status', 'cancelled')
+      .gte('created_at', startIso)
+      .lt('created_at', endIso);
+
+    if (countErr) {
+      console.error('查詢本月訂單筆數失敗:', countErr);
+      return NextResponse.json(
+        { success: false, error: '系統忙碌中，請稍後再試' },
+        { status: 500 }
+      );
+    }
+
+    if ((currentMonthCount ?? 0) >= monthlyLimit) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `本商店本月線上訂單已達上限（${monthlyLimit} 筆），請直接聯繫店家訂購`,
+        },
+        { status: 429 }
+      );
+    }
+
+    // 3. 取得資料庫最新商品單價與庫存
     const productIds = validItems.map((i) => i.productId);
     const { data: dbProducts, error: prodErr } = await supabase
       .from('products')
@@ -133,7 +199,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 3. 計算運費（自取 0 元；宅配依店家運費與免運門檻計算）
+    // 4. 計算運費（自取 0 元；宅配依店家運費與免運門檻計算）
     let shippingFee = 0;
     if (deliveryMethod === 'cold_delivery') {
       const baseFee = Number(store.shipping_fee || 0);
@@ -147,7 +213,7 @@ export async function POST(req: NextRequest) {
 
     const totalAmount = subtotal + shippingFee;
 
-    // 4. 寫入 orders 主表
+    // 5. 寫入 orders 主表
     const { data: createdOrder, error: orderErr } = await supabase
       .from('orders')
       .insert({
@@ -173,7 +239,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: '建立訂單失敗，請稍後再試' }, { status: 500 });
     }
 
-    // 5. 寫入 order_items 明細
+    // 6. 寫入 order_items 明細
     const { error: itemsErr } = await supabase.from('order_items').insert(
       orderItemsToInsert.map(({ newStock: _ignore, ...row }) => ({
         order_id: createdOrder.id,
@@ -185,7 +251,7 @@ export async function POST(req: NextRequest) {
       console.error('寫入訂單明細失敗:', itemsErr);
     }
 
-    // 6. 扣除有設定庫存的商品數量
+    // 7. 扣除有設定庫存的商品數量
     for (const item of orderItemsToInsert) {
       if (item.newStock !== null) {
         await supabase
@@ -195,12 +261,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 7. 推播 LINE 新訂單通知給老闆
+    // 8. 推播 LINE 新訂單通知給老闆
     const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
     const ownerLineId = store.owner_line_id;
-	const liffBaseUrl =
-	  process.env.NEXT_PUBLIC_LIFF_URL || 'https://liff.line.me/2012698099-NqhRzmeW';
-	const ownerUrl = `${liffBaseUrl}/store/${store.id}/owner`;
+    const liffBaseUrl =
+      process.env.NEXT_PUBLIC_LIFF_URL || 'https://liff.line.me/2012698099-NqhRzmeW';
+    const ownerUrl = `${liffBaseUrl}/store/${store.id}/owner`;
     if (channelAccessToken && ownerLineId && !String(ownerLineId).startsWith('demo')) {
       const summaryLines = orderItemsToInsert
         .map((i) => `・${i.product_name} x${i.quantity}`)

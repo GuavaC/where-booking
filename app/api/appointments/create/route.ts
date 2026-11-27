@@ -7,6 +7,36 @@ const supabaseKey =
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const DEFAULT_MONTHLY_LIMIT = 50;
+
+function getMonthlyLimit(): number {
+  const raw = Number(process.env.MONTHLY_BOOKING_LIMIT);
+  if (Number.isFinite(raw) && raw > 0) {
+    return Math.floor(raw);
+  }
+  return DEFAULT_MONTHLY_LIMIT;
+}
+
+function getTaiwanMonthRangeIso(now = new Date()): { startIso: string; endIso: string } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(now);
+
+  const year = Number(parts.find((p) => p.type === 'year')?.value);
+  const month = Number(parts.find((p) => p.type === 'month')?.value);
+
+  // 台灣為 UTC+8（無日光節約時間），月初 00:00:00+08:00 轉成 UTC ISO 字串
+  const startUtcMs = Date.UTC(year, month - 1, 1, -8, 0, 0, 0);
+  const nextMonthUtcMs = Date.UTC(year, month, 1, -8, 0, 0, 0);
+
+  return {
+    startIso: new Date(startUtcMs).toISOString(),
+    endIso: new Date(nextMonthUtcMs).toISOString(),
+  };
+}
+
 function formatTaiwanDateTime(isoString: string): string {
   try {
     const d = new Date(isoString);
@@ -70,7 +100,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: '找不到此預約店家' }, { status: 404 });
     }
 
-    // 2. 取得服務項目名稱與金額
+    // 2. 檢查該店家本月預約筆數是否已達上限（排除已取消）
+    const monthlyLimit = getMonthlyLimit();
+    const { startIso, endIso } = getTaiwanMonthRangeIso();
+
+    const { count: currentMonthCount, error: countErr } = await supabase
+      .from('appointments')
+      .select('id', { count: 'exact', head: true })
+      .eq('store_id', storeId)
+      .neq('payment_status', 'cancelled')
+      .gte('created_at', startIso)
+      .lt('created_at', endIso);
+
+    if (countErr) {
+      console.error('查詢本月預約筆數失敗:', countErr);
+      return NextResponse.json(
+        { success: false, error: '系統忙碌中，請稍後再試' },
+        { status: 500 }
+      );
+    }
+
+    if ((currentMonthCount ?? 0) >= monthlyLimit) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `本商店本月線上預約已達上限（${monthlyLimit} 筆），請直接聯繫店家預約`,
+        },
+        { status: 429 }
+      );
+    }
+
+    // 3. 取得服務項目名稱與金額
     const { data: service, error: serviceErr } = await supabase
       .from('services')
       .select('id, name, price, deposit, duration_minutes')
@@ -82,7 +142,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: '找不到此服務項目' }, { status: 404 });
     }
 
-    // 3. 檢查該時段是否剛被其他客人搶先預約（排除已取消）
+    // 4. 檢查該時段是否剛被其他客人搶先預約（排除已取消）
     const { data: conflictAppts } = await supabase
       .from('appointments')
       .select('id')
@@ -98,7 +158,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 4. 寫入 appointments 資料表
+    // 5. 寫入 appointments 資料表
     const { data: createdAppointment, error: insertErr } = await supabase
       .from('appointments')
       .insert({
@@ -122,12 +182,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 5. 推播 LINE 新預約通知給老闆
+    // 6. 推播 LINE 新預約通知給老闆
     const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
     const ownerLineId = store.owner_line_id;
-	const liffBaseUrl =
-	  process.env.NEXT_PUBLIC_LIFF_URL || 'https://liff.line.me/2012698099-NqhRzmeW';
-	const ownerUrl = `${liffBaseUrl}/store/${store.id}/owner`;
+    const liffBaseUrl =
+      process.env.NEXT_PUBLIC_LIFF_URL || 'https://liff.line.me/2012698099-NqhRzmeW';
+    const ownerUrl = `${liffBaseUrl}/store/${store.id}/owner`;
 
     if (channelAccessToken && ownerLineId && !String(ownerLineId).startsWith('demo')) {
       const formattedTime = formatTaiwanDateTime(startTime);
